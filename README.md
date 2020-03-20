@@ -11,7 +11,7 @@ mkdir -p ~/353_ws/src
 * Clone the repository into the catkin workspace src folder.
 ```
 cd ~/353_ws/src
-git clone https://github.com/ENPH353/competition_2019t2.git
+git clone https://github.com/ENPH353-ProjectLagrangian/competition_2019t2.git
 ```
 
 * Build the packages
