@@ -1,6 +1,7 @@
 #!/bin/bash
 
 generate_plates='false'
+spawn_pedestrians='false'
 
 print_usage() {
   echo "Usage:"
@@ -10,6 +11,7 @@ print_usage() {
 while getopts 'vpgl' flag; do
   case "${flag}" in
     g) generate_plates='true' ;;
+    p) spawn_pedestrians='true' ;;
     *) print_usage
        exit 1 ;;
   esac
@@ -25,4 +27,4 @@ fi
 
 ln -sfn unlabelled ../media/materials/textures/license_plates
 
-roslaunch competition_2019t2 my_launch.launch
+roslaunch competition_2019t2 my_launch.launch spawn_pedestrians:=$spawn_pedestrians

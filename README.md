@@ -35,6 +35,7 @@ You can run the simulation with or without any options. So far there is one opti
 | Option | Description      |
 |:-------|:---------------- |
 | -g     | generate new random license plates |
+| -p     | add pedestrians crossing the crosswalk |
 
 ## Working within the simulation:
 Once the simulation is started you can interact with it in multiple ways.
