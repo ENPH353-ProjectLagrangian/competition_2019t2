@@ -1,0 +1,28 @@
+<launch>
+	<arg name="spawn_pedestrians"/>
+	<group if="$(arg spawn_pedestrians)">
+		<group ns="P1">
+			<param name="tf_prefix" value="P1_tf" />
+			<include file="$(find competition_2019t2)/launch/pedestrian.launch">
+				<arg name="init_pose" value="-x 1.1 -y -1.2 -z 0.01 -R 0.0 -P 0.0 -Y 4.71" />
+				<arg name="robot_name"  value="P1" />
+				<arg name="pose_a_x" value="1.1"/>
+				<arg name="pose_a_y" value="-1.2"/>
+				<arg name="pose_b_x" value="1.1"/>
+				<arg name="pose_b_y" value="-2.7"/>
+			</include>
+		</group>
+
+		<group ns="P2">
+			<param name="tf_prefix" value="P2_tf" />
+			<include file="$(find competition_2019t2)/launch/pedestrian.launch">
+				<arg name="init_pose" value="-x 1.1 -y 1.2 -z 0.01 -R 0.0 -P 0.0 -Y 0.0" />
+				<arg name="robot_name"  value="P2" />
+				<arg name="pose_a_x" value="1.1"/>
+				<arg name="pose_a_y" value="1.2"/>
+				<arg name="pose_b_x" value="1.1"/>
+				<arg name="pose_b_y" value="2.7"/>
+			</include>
+		</group>
+	</group>
+</launch>

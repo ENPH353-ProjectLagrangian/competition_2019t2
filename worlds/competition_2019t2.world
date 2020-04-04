@@ -15,7 +15,7 @@
     </scene>
     <gui>
       <camera name="user_camera">
-        <pose>0.0 0.0 4.0 0.0 1.57 0.0</pose>
+        <pose>0.0 0.0 10.0 0.0 1.57 0.0</pose>
       </camera>
     </gui>
 

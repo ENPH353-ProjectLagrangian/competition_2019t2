@@ -18,14 +18,14 @@
       <pose>0 0 0 0 0 0</pose>
       <geometry>
         <box>
-          <size>5.7 1e-6 0.4</size>
+          <size>6 1e-6 2</size>
         </box>
       </geometry>
     </collision>
     <visual name='visual'>
       <geometry>
         <box>
-          <size>5.7 1e-6 0.4</size>
+          <size>6 1e-6 2</size>
         </box>
       </geometry>
       <material>
