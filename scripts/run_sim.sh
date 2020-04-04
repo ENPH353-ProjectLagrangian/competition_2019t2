@@ -25,4 +25,4 @@ fi
 
 ln -sfn unlabelled ../media/materials/textures/license_plates
 
-roslaunch competition_2019t2 my_launch.launch
+roslaunch competition_2019t2 homography.launch
