@@ -9,10 +9,7 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 import global_variables as gv
 
-# Some booleans to adjust
 visualize = True
-verbose = True
-dumbest = True
 
 ros.init_node('topic_publisher')
 
@@ -55,8 +52,26 @@ def process_image(imgmsg):
     global heading
     img = get_image(imgmsg)
 
-    # Generates the top down view used to find headings.
-    # (You can crop this to adjust when the dumb algorithm turns)
+    gray_0 = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    ret, thresh_0 = cv2.threshold(gray_0, 210, 255, cv2.THRESH_BINARY)
+    edges_0 = cv2.Canny(thresh_0, 50, 150, apertureSize=3)
+    lines_0 = ipu.get_hough_lines(img=edges_0, img_type="edges", threshold=threshold)
+
+    cx = 320.0
+    cy = 240.0
+    f = 320.0 / np.tan(1)
+
+    ty = 0.365
+
+    prime_lines = []
+    for line in lines_0:
+        rho, theta = line[0]
+        theta_prime = np.arctan(1 / f * (rho / np.cos(theta) - cy * np.tan(theta) - cx))
+        rho_prime = ty * np.tan(theta) * np.cos(theta_prime)
+        prime_lines.append([rho_prime, theta_prime])
+    print(lines_0)
+    print(prime_lines)
 
     top_down = cv2.warpPerspective(img, homography, (shape[1], shape[0]))
 
@@ -80,16 +95,20 @@ def process_image(imgmsg):
             # Apply KMeans
             compactness, labels, headings = cv2.kmeans(angles, 2, None, criteria, 10, flags)
 
-            if dumbest:  # Chooses heading closest to zero
-                idx = (np.abs(headings)).argmin()
-            else:  # Chooses the heading closest to the previous heading to follow
-                # (need to remove outliers to make this work)
-                idx = (np.abs(headings - heading)).argmin()
+            clusters = np.array([angles[labels == 0], angles[labels == 1]])
 
-            if verbose:
-                print("The previous heading was: {0!s}. Out of these headings {1!s} "
-                      "the current heading is {2!s}.".format(
-                    heading, headings, headings[idx][0]))
+            # Chooses the heading closest to the previous heading to follow
+
+            idx = (np.abs(headings - heading)).argmin()
+
+            switch = False
+            if switch is True:
+                heading = headings[not idx][0]
+            else:
+                heading = headings[idx][0]
+
+            # print("The previous heading was: {0!s}. Out of these headings {1!s} the current heading is {2!s}.".format(
+            #        heading, headings, headings[idx][0]))
 
             heading = headings[idx][0]
 
