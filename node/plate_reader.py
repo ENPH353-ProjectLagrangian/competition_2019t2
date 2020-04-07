@@ -4,8 +4,8 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge
 
-# import tensorflow as tf
-from tensorflow import keras
+import tensorflow as tf
+from tensorflow import keras, Graph, Session
 import cv2
 import numpy as np
 
@@ -25,11 +25,16 @@ class PlateReader():
         @param: num_model_path - path to keras ML model which IDs numbers
         @param: num_model_path - path to keras ML model which IDs letters
         """
-        self.num_model = keras.models.load_model(num_model_path)
-        self.char_model = keras.models.load_model(char_model_path)
-        if (multithreaded):
-            self.num_model._make_predict_function()
-            self.char_model._make_predict_function()
+        thread_graph = Graph()
+        with thread_graph.as_default():
+            self.thread_session = Session()
+            with self.thread_session.as_default():
+                self.num_model = keras.models.load_model(num_model_path)
+                self.char_model = keras.models.load_model(char_model_path)
+                self.graph = tf.get_default_graph()
+        # if (multithreaded):
+        #     self.num_model._make_predict_function()
+        #     self.char_model._make_predict_function()
 
         # key: parking spot (int)
         # val: (license, confidence lvl)
@@ -112,15 +117,23 @@ class PlateReader():
 
     def _get_num_and_prob(self, img):
         img = self._preprocess_image(img)
-        prediction = self.num_model.predict(img)
-        num = np.argmax(prediction)
-        return num, prediction[0, num]
+        with self.graph.as_default():
+            with self.thread_session.as_default():
+                prediction = self.num_model.predict(img)
+            num = np.argmax(prediction)
+            return num, prediction[0, num]
+        print("something horrible happened")
+        return None, None
 
     def _get_char_and_prob(self, img):
         img = self._preprocess_image(img)
-        prediction = self.char_model.predict(img)
-        index = np.argmax(prediction)
-        return chr(index + 65), prediction[0, index]
+        with self.graph.as_default():
+            with self.thread_session.as_default():
+                prediction = self.char_model.predict(img)
+                index = np.argmax(prediction)
+                return chr(index + 65), prediction[0, index]
+        print("something horrible happened")
+        return None, None
 
     def _preprocess_image(self, img):
         WIDTH = 100

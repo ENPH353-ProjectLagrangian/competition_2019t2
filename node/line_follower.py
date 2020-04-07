@@ -64,7 +64,7 @@ def process_image(imgmsg):
     parking_spot, license_text, certainty = plate_reader.process_image(img)
     if (parking_spot is not None):
         print("Parking {}: {} ({})".format(parking_spot, license_text,
-                                         certainty))
+                                           certainty))
     # -- PLATE READER ---
 
     top_down = cv2.warpPerspective(img, homography, (shape[1], shape[0]))
