@@ -55,3 +55,5 @@ competition_2019t2/urdf/robot.xacro
 ```
 we use the same plugins we used in Lab 03.
 
+# RESOURCES:
+https://blog.victormeunier.com/posts/keras_multithread/
