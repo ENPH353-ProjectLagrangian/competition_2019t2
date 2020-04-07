@@ -7,8 +7,10 @@ import cv2
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
-import copy
+# import copy
 import global_variables as gv
+
+from plate_reader import PlateReader
 
 visualize = True
 
@@ -41,17 +43,29 @@ flags = cv2.KMEANS_RANDOM_CENTERS
 
 heading = 0
 
+plate_reader = PlateReader(gv.path + '/assets/num_model.h5',
+                           gv.path + '/assets/char_model.h5')
+
 
 def get_image(imgmsg):
     # Try to convert
     cv_image = bridge.imgmsg_to_cv2(imgmsg)
 
-    return cv_image
+    return cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
 
 
 def process_image(imgmsg):
     global heading
+
+    # --- PLATE READER ---
+    # plate_reader = PlateReader(gv.path + '/assets/num_model.h5',
+    #                            gv.path + '/assets/char_model.h5')
     img = get_image(imgmsg)
+    parking_spot, license_text, certainty = plate_reader.process_image(img)
+    if (parking_spot is not None):
+        print("Parking {}: {} ({})".format(parking_spot, license_text,
+                                         certainty))
+    # -- PLATE READER ---
 
     top_down = cv2.warpPerspective(img, homography, (shape[1], shape[0]))
 
@@ -115,3 +129,4 @@ def process_image(imgmsg):
 if __name__ == '__main__':
     ros.Subscriber('/rrbot/camera1/image_raw', Image, process_image)
     ros.spin()
+    plate_reader.get_all_license(print_str=True)

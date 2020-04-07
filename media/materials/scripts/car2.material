@@ -5,7 +5,7 @@ material car2{
         {
             texture_unit
             {
-                texture license_plates/plate_2.png
+                texture license_plates/plate_0.png
             }
         }   
     }

@@ -14,18 +14,23 @@ from PIL import Image, ImageFont, ImageDraw
 path = os.path.dirname(os.path.realpath(__file__)) + "/"
 texture_path = '../media/materials/textures/'
 
+alphabet = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
+            'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+            'U', 'V', 'W', 'X', 'Y', 'Z']
+
 with open(path + "plates.csv", 'w') as plates_file:
     csvwriter = csv.writer(plates_file)
 
-    for i in range(0, 16):
+    for i in range(0, 26):
 
         ### Generate license plates
         
         # Pick two random letters
-        plate_alpha = ""
-        for _ in range(0, 2):
-            plate_alpha += (random.choice(string.ascii_uppercase))
+        # plate_alpha = ""
+        # for _ in range(0, 2):
+        #     plate_alpha += (random.choice(string.ascii_uppercase))
         num = randint(0, 99)
+        plate_alpha = alphabet[i] + alphabet[i]
 
         # Pick two random numbers
         plate_num = "{:02d}".format(num)
