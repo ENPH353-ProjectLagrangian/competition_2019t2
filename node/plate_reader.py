@@ -16,6 +16,7 @@ import global_variables as gv
 class PlateReader():
     """
     Given an image, the PlateReader object will track license-parking pairs that it sees    
+    Resources used: https://blog.victormeunier.com/posts/keras_multithread/
     """
     def __init__(self, num_model_path, char_model_path, certainty_thresh=0.8, 
                  multithreaded=True):
@@ -120,8 +121,8 @@ class PlateReader():
         with self.graph.as_default():
             with self.thread_session.as_default():
                 prediction = self.num_model.predict(img)
-            num = np.argmax(prediction)
-            return num, prediction[0, num]
+                num = np.argmax(prediction)
+                return num, prediction[0, num]
         print("something horrible happened")
         return None, None
 
