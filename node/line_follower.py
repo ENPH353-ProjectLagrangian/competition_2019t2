@@ -10,6 +10,8 @@ from geometry_msgs.msg import Twist
 import global_variables as gv
 import copy
 
+from plate_reader import PlateReader
+
 
 def get_image(imgmsg):
     # Try to convert
@@ -23,6 +25,7 @@ def process_image(imgmsg):
     global turn_counter
     global switch_index
     global skip
+    global plate_reader
 
     img = get_image(imgmsg)
     keypoints = ipu.detect_crosswalk(img)
@@ -31,6 +34,9 @@ def process_image(imgmsg):
                                           (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
     cv2.imshow("keypoints", im_with_keypoints)
+    parking, license_text, prob = plate_reader.process_image(img)
+    if (parking is not None):
+        print('Parking {}: {} ({})'.format(parking, license_text, prob))
 
     # Generates the top down view used to find headings.
 
@@ -155,6 +161,11 @@ def process_image(imgmsg):
 
 
 if __name__ == '__main__':
+    # image processing
+    num_path = gv.path + '/assets/num_model_new.h5'
+    char_path = gv.path + '/assets/char_model_new.h5'
+    plate_reader = PlateReader(num_path, char_path)
+
     # Some booleans to adjust
     visualize = True
     verbose = False
@@ -187,3 +198,4 @@ if __name__ == '__main__':
     switch_index = None
     ros.Subscriber('/rrbot/camera1/image_raw', Image, process_image)
     ros.spin()
+    print(plate_reader)
