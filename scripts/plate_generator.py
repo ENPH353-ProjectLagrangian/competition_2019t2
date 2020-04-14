@@ -13,11 +13,14 @@ from PIL import Image, ImageFont, ImageDraw
 
 path = os.path.dirname(os.path.realpath(__file__)) + "/"
 texture_path = '../media/materials/textures/'
+NUM_PLATES = 16
 
 with open(path + "plates.csv", 'w') as plates_file:
     csvwriter = csv.writer(plates_file)
+    positions = range(1, NUM_PLATES+1)
+    random.shuffle(positions)
 
-    for i in range(0, 16):
+    for i in range(0, NUM_PLATES):
 
         ### Generate license plates
         
@@ -45,10 +48,10 @@ with open(path + "plates.csv", 'w') as plates_file:
         # Get a drawing context
         draw = ImageDraw.Draw(blank_plate_pil)
         monospace = ImageFont.truetype("/usr/share/fonts/truetype/ubuntu/UbuntuMono-R.ttf", 120)
-        X_POS = 15
+        X_POS = 25
         Y_POS = 450
         draw.text((X_POS, Y_POS), plate_alpha, (0,0,0), font=monospace)
-        draw.text((X_POS + 150, Y_POS), plate_num, (0,0,0), font=monospace)
+        draw.text((X_POS + 135, Y_POS), plate_num, (0,0,0), font=monospace)
 
         # Create QR code image
         # spot_name = "P" + str(i)
@@ -59,8 +62,8 @@ with open(path + "plates.csv", 'w') as plates_file:
         # QR_img = cv2.resize(QR_img, (600, 600), interpolation=cv2.INTER_AREA)
 
         # Create parking spot label
-        s = "P" + str(i+1)
-        draw.text((85, 20), s, (0, 0, 0), font=monospace)
+        s = "P{:02d}".format(positions[i])
+        draw.text((65, 20), s, (0, 0, 0), font=monospace)
 
         # Convert back to OpenCV image and save
         blank_plate = np.array(blank_plate_pil)
