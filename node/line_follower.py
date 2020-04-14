@@ -10,6 +10,8 @@ from geometry_msgs.msg import Twist
 import global_variables as gv
 import copy
 
+from plate_reader import PlateReader
+
 
 def find_cardinal_clusters(angles):
     # The K-means algorithm is sometimes unreliable.
@@ -85,7 +87,7 @@ def get_image(imgmsg):
     # Try to convert
     cv_image = bridge.imgmsg_to_cv2(imgmsg)
 
-    return cv_image
+    return cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
 
 
 def process_image(imgmsg):
@@ -93,8 +95,12 @@ def process_image(imgmsg):
     global turn_counter
     global switch_index
     global skip
+    global plate_reader
 
     img = get_image(imgmsg)
+    parking, license_text, prob = plate_reader.process_image(img)
+    if (parking is not None):
+        print('Parking {}: {} ({})'.format(parking, license_text, prob))
 
     # Generates the top down view used to find headings.
     # (You can crop this to adjust when the dumb algorithm turns)
@@ -220,6 +226,11 @@ def process_image(imgmsg):
 
 
 if __name__ == '__main__':
+    # image processing
+    num_path = gv.path + '/assets/num_model_new.h5'
+    char_path = gv.path + '/assets/char_model_new.h5'
+    plate_reader = PlateReader(num_path, char_path)
+
     # Some booleans to adjust
     visualize = True
     verbose = False
@@ -252,3 +263,4 @@ if __name__ == '__main__':
     switch_index = None
     ros.Subscriber('/rrbot/camera1/image_raw', Image, process_image)
     ros.spin()
+    print(plate_reader)
