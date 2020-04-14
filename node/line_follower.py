@@ -11,80 +11,10 @@ import global_variables as gv
 import copy
 
 
-def find_cardinal_clusters(angles):
-    # The K-means algorithm is sometimes unreliable.
-    # But because we know the distribution of the angles already we can create a much more reliable one
-
-    good_buckets = np.array([[0], [np.pi / 2]])
-    min_include = -1
-
-    half_bucket = np.pi * 5 / 180
-
-    # First split the angles into buckets 90 degrees apart. Find the set of buckets that include the most points.
-    # This is a course move through the state space buckets are 10 degrees wide spaced 5 degrees apart.
-
-    for theta_0 in np.linspace(0, np.pi / 2.0, 18, endpoint=False):
-        buckets = [[], [], []]
-        for angle in angles:
-
-            if theta_0 - half_bucket <= angle[0] <= theta_0 + half_bucket:
-                buckets[0].append(angle)
-            elif theta_0 - half_bucket - np.pi / 2.0 <= angle[0] <= theta_0 + half_bucket - np.pi / 2.0:
-                buckets[1].append(angle)
-            elif theta_0 - half_bucket + np.pi / 2.0 <= angle[0] <= theta_0 + half_bucket + np.pi / 2.0:
-                buckets[2].append(angle)
-
-        include = buckets[0].__len__() + buckets[1].__len__()
-
-        if include > min_include:
-            min_include = include
-            good_buckets = copy.copy(buckets)
-
-    #  Now we take a mean value to find the actual angle from the course buckets.
-
-    theta = 0
-
-    n = 0.0
-
-    if good_buckets[0].__len__() != 0:
-        theta += np.average(good_buckets[0])
-        n += 1.0
-    if good_buckets[1].__len__() != 0:
-        theta += np.average(good_buckets[1]) - np.pi / 2
-        n += 1.0
-    if good_buckets[2].__len__() != 0:
-        theta += np.average(good_buckets[2]) + np.pi / 2
-        n += 1.0
-
-    if n != 0:
-        theta *= 1 / n
-
-    #  Remake buckets at the refined center with indices.
-    final_bucket = [[], []]
-
-    for i in range(angles.__len__()):
-        if theta - half_bucket <= angles[i][0] <= theta + half_bucket:
-            final_bucket[0].append(i)
-        elif theta - half_bucket - np.pi / 2.0 <= angles[i][0] <= theta + half_bucket - np.pi / 2.0 or \
-                theta - half_bucket + np.pi / 2.0 <= angles[i][0] <= theta + half_bucket + np.pi / 2.0:
-            final_bucket[1].append(i)
-
-    headings = np.array([[theta], [theta + np.pi / 2.0]])
-    clusters = np.array(final_bucket)
-
-    # Normalize angles (pi=0, pi/2=-pi/2)
-    headings = np.array(list([[heading[0], heading[0] - np.pi][heading[0] > np.pi / 2]] for heading in headings))
-
-    if abs(headings[0]) > abs(headings[1]):
-        headings = headings[::-1]
-        clusters = clusters[::-1]
-    return headings, clusters
-
-
 def get_image(imgmsg):
     # Try to convert
     cv_image = bridge.imgmsg_to_cv2(imgmsg)
-
+    cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
     return cv_image
 
 
@@ -95,9 +25,14 @@ def process_image(imgmsg):
     global skip
 
     img = get_image(imgmsg)
+    keypoints = ipu.detect_crosswalk(img)
+    cv2.imshow("blue", img[:, :, 0])
+    im_with_keypoints = cv2.drawKeypoints(img, keypoints, np.array([]),
+                                          (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+    cv2.imshow("keypoints", im_with_keypoints)
 
     # Generates the top down view used to find headings.
-    # (You can crop this to adjust when the dumb algorithm turns)
 
     top_down = cv2.warpPerspective(img, homography, (shape[1], shape[0]))
 
@@ -114,7 +49,7 @@ def process_image(imgmsg):
         angles = lines[:, 0, 1]
         angles = np.array(list([[-angle, np.pi - angle][angle > np.pi / 2]] for angle in angles), dtype=np.float32)
 
-        headings, cluster_indexes = find_cardinal_clusters(angles)
+        headings, cluster_indexes = ipu.find_cardinal_clusters(angles)
 
         clusters = [np.array([lines[i] for i in cluster_indexes[0]]),
                     np.array([lines[i] for i in cluster_indexes[1]])]

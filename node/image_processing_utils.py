@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import global_variables as gv
+import copy
 
 
 def get_hough_lines(img, img_type="edges", threshold=125, probabilistic=False, min_line_length=100, max_line_gap=10):
@@ -60,37 +60,78 @@ def draw_lines(img, lines, probabilistic=False, color=(0, 0, 255), size=2):
                 cv2.line(img, (x1, y1), (x2, y2), color, size)
 
 
-def intersection(line1, line2):
-    """Finds the intersection of two lines given in Hesse normal form.
+def find_cardinal_clusters(angles):
+    # The K-means algorithm is sometimes unreliable.
+    # But because we know the distribution of the angles already we can create a much more reliable one
 
-    Returns closest integer pixel locations.
-    See https://stackoverflow.com/a/383527/5087436
-    """
-    rho1, theta1 = line1[0]
-    rho2, theta2 = line2[0]
+    good_buckets = np.array([[0], [np.pi / 2]])
+    min_include = -1
 
-    A = np.array([
-        [np.cos(theta1), np.sin(theta1)],
-        [np.cos(theta2), np.sin(theta2)]
-    ])
+    half_bucket = np.pi * 5 / 180
 
-    b = np.array([[rho1], [rho2]])
-    try:
-        x0, y0 = np.linalg.solve(A, b)
-    except np.linalg.LinAlgError:  # Lines are parallel
-        return None
+    # First split the angles into buckets 90 degrees apart. Find the set of buckets that include the most points.
+    # This is a course move through the state space buckets are 10 degrees wide spaced 5 degrees apart.
 
-    x0, y0 = int(np.round(x0)), int(np.round(y0))
-    return [x0, y0]
+    for theta_0 in np.linspace(0, np.pi / 2.0, 18, endpoint=False):
+        buckets = [[], [], []]
+        for angle in angles:
+
+            if theta_0 - half_bucket <= angle[0] <= theta_0 + half_bucket:
+                buckets[0].append(angle)
+            elif theta_0 - half_bucket - np.pi / 2.0 <= angle[0] <= theta_0 + half_bucket - np.pi / 2.0:
+                buckets[1].append(angle)
+            elif theta_0 - half_bucket + np.pi / 2.0 <= angle[0] <= theta_0 + half_bucket + np.pi / 2.0:
+                buckets[2].append(angle)
+
+        include = buckets[0].__len__() + buckets[1].__len__()
+
+        if include > min_include:
+            min_include = include
+            good_buckets = copy.copy(buckets)
+
+    #  Now we take a mean value to find the actual angle from the course buckets.
+
+    theta = 0
+
+    n = 0.0
+
+    if good_buckets[0].__len__() != 0:
+        theta += np.average(good_buckets[0])
+        n += 1.0
+    if good_buckets[1].__len__() != 0:
+        theta += np.average(good_buckets[1]) - np.pi / 2
+        n += 1.0
+    if good_buckets[2].__len__() != 0:
+        theta += np.average(good_buckets[2]) + np.pi / 2
+        n += 1.0
+
+    if n != 0:
+        theta *= 1 / n
+
+    #  Remake buckets at the refined center with indices.
+    final_bucket = [[], []]
+
+    for i in range(angles.__len__()):
+        if theta - half_bucket <= angles[i][0] <= theta + half_bucket:
+            final_bucket[0].append(i)
+        elif theta - half_bucket - np.pi / 2.0 <= angles[i][0] <= theta + half_bucket - np.pi / 2.0 or \
+                theta - half_bucket + np.pi / 2.0 <= angles[i][0] <= theta + half_bucket + np.pi / 2.0:
+            final_bucket[1].append(i)
+
+    headings = np.array([[theta], [theta + np.pi / 2.0]])
+    clusters = np.array(final_bucket)
+
+    # Normalize angles (pi=0, pi/2=-pi/2)
+    headings = np.array(list([[heading[0], heading[0] - np.pi][heading[0] > np.pi / 2]] for heading in headings))
+
+    if abs(headings[0]) > abs(headings[1]):
+        headings = headings[::-1]
+        clusters = clusters[::-1]
+    return headings, clusters
 
 
-def transform_to_top_down(img):
-    """
-    @param img:
-    @return: transformed image
-    """
-    homography = np.load(gv.path + "/assets/homography-sim_v0.npy")
-    shape = np.load(gv.path + "/assets/shape-sim.npy")
+def detect_crosswalk(img):
+    parameters = cv2.SimpleBlobDetector_Params()
+    detector = cv2.SimpleBlobDetector_create(parameters)
 
-    img = cv2.warpPerspective(img, homography, (shape[0], shape[1]))
-    return img
+    return detector.detect(img[:, :, 0])
