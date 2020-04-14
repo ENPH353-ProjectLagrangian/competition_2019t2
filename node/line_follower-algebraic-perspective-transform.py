@@ -21,10 +21,17 @@ capture_mode = "periodic"
 bridge = CvBridge()
 move = Twist()
 
+# Dimension stuff
 h = 1830
 w = 1330
 
-homography = np.load(gv.path + "/assets/homography-sim.npy")
+cx = 320.0
+cy = 240.0
+f = 320.0 / np.tan(1)
+
+ty = 0.365
+
+homography = np.load(gv.path + "/assets/homography-sim_v0.npy")
 shape = np.load(gv.path + "/assets/shape-sim.npy")
 
 threshold = 125
@@ -56,22 +63,17 @@ def process_image(imgmsg):
 
     ret, thresh_0 = cv2.threshold(gray_0, 210, 255, cv2.THRESH_BINARY)
     edges_0 = cv2.Canny(thresh_0, 50, 150, apertureSize=3)
-    lines_0 = ipu.get_hough_lines(img=edges_0, img_type="edges", threshold=threshold)
-
-    cx = 320.0
-    cy = 240.0
-    f = 320.0 / np.tan(1)
-
-    ty = 0.365
+    lines_0 = ipu.get_hough_lines(img=edges_0, img_type="edges", threshold=100)
 
     prime_lines = []
     for line in lines_0:
         rho, theta = line[0]
-        theta_prime = np.arctan(1 / f * (rho / np.cos(theta) - cy * np.tan(theta) - cx))
-        rho_prime = ty * np.tan(theta) * np.cos(theta_prime)
-        prime_lines.append([rho_prime, theta_prime])
-    print(lines_0)
-    print(prime_lines)
+        theta_prime = np.arctan(-1 / f * (rho / np.cos(theta) - cy * np.tan(theta) - cx))
+        rho_prime = (ty * np.tan(theta) + w / 2 - h * np.tan(theta_prime)) * np.cos(theta_prime)
+        prime_lines.append([[rho_prime, theta_prime]])
+
+    prime_lines = np.array(prime_lines)
+    print(np.array_str(prime_lines[:, 0, 1], precision=4, suppress_small=True))
 
     top_down = cv2.warpPerspective(img, homography, (shape[1], shape[0]))
 
@@ -84,22 +86,26 @@ def process_image(imgmsg):
     if lines is not None:
 
         if visualize:
-            ipu.draw_lines(top_down, lines)
+            ipu.draw_lines(top_down, lines, color=(255, 0, 0))
+            ipu.draw_lines(img, lines_0, color=(0, 255, 0))
 
-        if lines.__len__() == 1:
-            error = -lines[:, 0, 1][0]
+            ipu.draw_lines(top_down, prime_lines, color=(0, 255, 0))
+
+        angles = prime_lines[:, 0, 1]
+        # angles = lines[:, 0, 1]
+
+        angles = np.array(list([[-angle, angle - np.pi][angle > np.pi / 2]] for angle in angles), dtype=np.float32)
+
+        if angles.__len__() == 1:
+            error = angles[0][0]
         else:
-            angles = lines[:, 0, 1]
-            angles = np.array(list([[-angle, angle - np.pi][angle > np.pi / 2]] for angle in angles), dtype=np.float32)
 
             # Apply KMeans
             compactness, labels, headings = cv2.kmeans(angles, 2, None, criteria, 10, flags)
 
-            clusters = np.array([angles[labels == 0], angles[labels == 1]])
-
             # Chooses the heading closest to the previous heading to follow
 
-            idx = (np.abs(headings - heading)).argmin()
+            idx = (np.abs(headings - 0)).argmin()
 
             switch = False
             if switch is True:

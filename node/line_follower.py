@@ -8,40 +8,77 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from geometry_msgs.msg import Twist
 import global_variables as gv
+import copy
 
-# Some booleans to adjust
-visualize = True
-verbose = True
-dumbest = True
 
-ros.init_node('topic_publisher')
+def find_cardinal_clusters(angles):
+    # The K-means algorithm is sometimes unreliable.
+    # But because we know the distribution of the angles already we can create a much more reliable one
 
-pub = ros.Publisher('/cmd_vel', Twist, queue_size=1)
-capture_period = ros.Rate(50)
+    good_buckets = np.array([[0], [np.pi / 2]])
+    min_include = -1
 
-capture_mode = "periodic"
+    half_bucket = np.pi * 5 / 180
 
-bridge = CvBridge()
-move = Twist()
+    # First split the angles into buckets 90 degrees apart. Find the set of buckets that include the most points.
+    # This is a course move through the state space buckets are 10 degrees wide spaced 5 degrees apart.
 
-h = 1830
-w = 1330
+    for theta_0 in np.linspace(0, np.pi / 2.0, 18, endpoint=False):
+        buckets = [[], [], []]
+        for angle in angles:
 
-homography = np.load(gv.path + "/assets/homography-sim.npy")
-shape = np.load(gv.path + "/assets/shape-sim.npy")
+            if theta_0 - half_bucket <= angle[0] <= theta_0 + half_bucket:
+                buckets[0].append(angle)
+            elif theta_0 - half_bucket - np.pi / 2.0 <= angle[0] <= theta_0 + half_bucket - np.pi / 2.0:
+                buckets[1].append(angle)
+            elif theta_0 - half_bucket + np.pi / 2.0 <= angle[0] <= theta_0 + half_bucket + np.pi / 2.0:
+                buckets[2].append(angle)
 
-threshold = 125
+        include = buckets[0].__len__() + buckets[1].__len__()
 
-# K means stuff
-# Define criteria = ( type, max_iter = 10 , epsilon = 1.0 )
-criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        if include > min_include:
+            min_include = include
+            good_buckets = copy.copy(buckets)
 
-# Set flags (Just to avoid line break in the code)
-flags = cv2.KMEANS_RANDOM_CENTERS
+    #  Now we take a mean value to find the actual angle from the course buckets.
 
-# Path following
+    theta = 0
 
-heading = 0
+    n = 0.0
+
+    if good_buckets[0].__len__() != 0:
+        theta += np.average(good_buckets[0])
+        n += 1.0
+    if good_buckets[1].__len__() != 0:
+        theta += np.average(good_buckets[1]) - np.pi / 2
+        n += 1.0
+    if good_buckets[2].__len__() != 0:
+        theta += np.average(good_buckets[2]) + np.pi / 2
+        n += 1.0
+
+    if n != 0:
+        theta *= 1 / n
+
+    #  Remake buckets at the refined center with indices.
+    final_bucket = [[], []]
+
+    for i in range(angles.__len__()):
+        if theta - half_bucket <= angles[i][0] <= theta + half_bucket:
+            final_bucket[0].append(i)
+        elif theta - half_bucket - np.pi / 2.0 <= angles[i][0] <= theta + half_bucket - np.pi / 2.0 or \
+                theta - half_bucket + np.pi / 2.0 <= angles[i][0] <= theta + half_bucket + np.pi / 2.0:
+            final_bucket[1].append(i)
+
+    headings = np.array([[theta], [theta + np.pi / 2.0]])
+    clusters = np.array(final_bucket)
+
+    # Normalize angles (pi=0, pi/2=-pi/2)
+    headings = np.array(list([[heading[0], heading[0] - np.pi][heading[0] > np.pi / 2]] for heading in headings))
+
+    if abs(headings[0]) > abs(headings[1]):
+        headings = headings[::-1]
+        clusters = clusters[::-1]
+    return headings, clusters
 
 
 def get_image(imgmsg):
@@ -53,6 +90,10 @@ def get_image(imgmsg):
 
 def process_image(imgmsg):
     global heading
+    global turn_counter
+    global switch_index
+    global skip
+
     img = get_image(imgmsg)
 
     # Generates the top down view used to find headings.
@@ -67,40 +108,108 @@ def process_image(imgmsg):
     lines = ipu.get_hough_lines(img=edges, img_type="edges", threshold=threshold)
 
     if lines is not None:
-
         if visualize:
             ipu.draw_lines(top_down, lines)
 
-        if lines.__len__() == 1:
-            error = -lines[:, 0, 1][0]
+        angles = lines[:, 0, 1]
+        angles = np.array(list([[-angle, np.pi - angle][angle > np.pi / 2]] for angle in angles), dtype=np.float32)
+
+        headings, cluster_indexes = find_cardinal_clusters(angles)
+
+        clusters = [np.array([lines[i] for i in cluster_indexes[0]]),
+                    np.array([lines[i] for i in cluster_indexes[1]])]
+
+        #  There is an ambiguity in which direction is "forward" when theta is close to pi/2.
+        #  -1 is right turn, 1 is left turn.
+        turn_bias = -1  # Starts off at -1 could be changed by reinforcement learning
+        # but probably shouldn't for this naive approach.
+
+        # The margin of what is considered "close" to an angle
+        tolerance = np.pi / 60  # 3 degrees
+
+        head_abs = np.abs(headings[1])
+        if np.abs(head_abs - 1.57) < tolerance:
+            headings[1] = turn_bias * head_abs
+
+        #  Initial state
+        state_x = 3 * [0]
+        state_y = 5 * [0]
+
+        if verbose:
+            print("The most recent heading was: " + str(heading))
+
+        # Chooses the heading closest to the previous heading to follow
+        aligned_index = (np.abs(headings - heading)).argmin()
+
+        alignment_tolerance = np.pi / 60
+
+        aligned = headings[aligned_index][0] < alignment_tolerance
+        if aligned:  # Checks to see if robot is aligned
+
+            for line in clusters[0]:
+                rho = line[0][0]
+                i = int(rho / w * 3)
+                i = max(i, 0)
+                i = min(i, 2)
+                state_x[i] = 1
+
+            for line in clusters[1]:
+                rho = line[0][0]
+                i = int(rho / h * 5)
+                i = max(i, 0)
+                i = min(i, 4)
+                state_y[i] = 1
+
+            if visualize:
+                grid_lines = []
+                for i in range(1, 3):
+                    grid_lines.append([[int(i / 3.0 * w), 0]])
+                for i in range(1, 5):
+                    grid_lines.append([[int(i / 5.0 * h), np.pi / 2]])
+                ipu.draw_lines(top_down, grid_lines, color=(0, 255, 0))
         else:
-            angles = lines[:, 0, 1]
-            angles = np.array(list([[-angle, angle - np.pi][angle > np.pi / 2]] for angle in angles), dtype=np.float32)
+            print(lines)
 
-            # Apply KMeans
-            compactness, labels, headings = cv2.kmeans(angles, 2, None, criteria, 10, flags)
+        turn = (state_y == [0, 0, 0, 0, 1] and state_x[1] == 0)
 
-            if dumbest:  # Chooses heading closest to zero
-                idx = (np.abs(headings)).argmin()
-            else:  # Chooses the heading closest to the previous heading to follow
-                # (need to remove outliers to make this work)
-                idx = (np.abs(headings - heading)).argmin()
+        # The first corner defines the index count for long stretches of road.
+        if turn and switch_index is None:
+            switch_index = turn_counter
 
-            if verbose:
-                print("The previous heading was: {0!s}. Out of these headings {1!s} "
-                      "the current heading is {2!s}.".format(
-                    heading, headings, headings[idx][0]))
+        # We want a cooldown before we turn again
+        turn = turn and turn_counter > switch_index * 1 / 3.0
 
-            heading = headings[idx][0]
+        if not turn:
+            heading = headings[aligned_index][0]
+            turn_counter += 1
+        else:
+            if turn_counter <= switch_index * 2 / 3.0:
+                if skip == 2:
+                    skip = -1
 
-            error = heading
-        p_gain = 1.1
+                    heading = headings[aligned_index][0]
+                else:
+                    skip += 1
+                    heading = headings[int(not aligned_index)][0]
+            else:
+                heading = headings[int(not aligned_index)][0]
+
+            print("turn counter: " + str(turn_counter))
+            turn_counter = 0
+
+            print("skip state: " + str(skip))
+
+        if verbose:
+            print("The current primary directions are {0!s} the new heading is {1!s}.".format(headings, heading))
+
+        error = heading
 
         move.angular.z = p_gain * error
-        move.linear.x = 0.2
+        move.linear.x = x_vel
     else:
-        move.angular.x = -0.3
-        move.angular.z = 0.5
+        # If it can't find the line then
+        move.angular.x = x_vel
+        move.angular.z = p_gain * heading
 
     if visualize:
         cv2.imshow('top down', top_down)
@@ -111,5 +220,35 @@ def process_image(imgmsg):
 
 
 if __name__ == '__main__':
+    # Some booleans to adjust
+    visualize = True
+    verbose = False
+    clustering_algorithm = "custom"
+
+    ros.init_node('topic_publisher')
+
+    pub = ros.Publisher('/cmd_vel', Twist, queue_size=1)
+    capture_period = ros.Rate(50)
+
+    capture_mode = "periodic"
+
+    bridge = CvBridge()
+    move = Twist()
+
+    homography = np.load(gv.path + "/assets/homography-sim_v4.npy")
+    shape = np.load(gv.path + "/assets/shape-sim_v4.npy")
+
+    h = 732
+    w = shape[0]
+
+    threshold = 100
+
+    # Path following
+    p_gain = 1
+    x_vel = 0.2
+    heading = 0
+    skip = 0
+    turn_counter = 0
+    switch_index = None
     ros.Subscriber('/rrbot/camera1/image_raw', Image, process_image)
     ros.spin()

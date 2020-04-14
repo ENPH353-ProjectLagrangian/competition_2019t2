@@ -89,7 +89,7 @@ def transform_to_top_down(img):
     @param img:
     @return: transformed image
     """
-    homography = np.load(gv.path + "/assets/homography-sim.npy")
+    homography = np.load(gv.path + "/assets/homography-sim_v0.npy")
     shape = np.load(gv.path + "/assets/shape-sim.npy")
 
     img = cv2.warpPerspective(img, homography, (shape[0], shape[1]))
