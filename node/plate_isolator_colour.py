@@ -138,8 +138,8 @@ class PlateIsolatorColour:
 
         # 2. Use mask to get contours
         plate_mask = cv2.GaussianBlur(plate_mask, (5, 5), 1)  # regularise
-        _, contours, _ = cv2.findContours(plate_mask, cv2.RETR_TREE,
-                                          cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(plate_mask, cv2.RETR_TREE,
+                                       cv2.CHAIN_APPROX_SIMPLE)
 
         # 3. Discard contours with too small area
         MIN_AREA = int(0.75 * plate_mask.shape[0] / 10
@@ -194,12 +194,12 @@ class PlateIsolatorColour:
         return parking_poly[:, 0, :], license_poly[:, 0, :]
 
     def car_contour(self, mask):
-        _, contours0, _ = cv2.findContours(mask[0], cv2.RETR_TREE,
-                                           cv2.CHAIN_APPROX_SIMPLE)
-        _, contours1, _ = cv2.findContours(mask[1], cv2.RETR_TREE,
-                                           cv2.CHAIN_APPROX_SIMPLE)
-        _, contours2, _ = cv2.findContours(mask[2], cv2.RETR_TREE,
-                                           cv2.CHAIN_APPROX_SIMPLE)
+        contours0, _ = cv2.findContours(mask[0], cv2.RETR_TREE,
+                                        cv2.CHAIN_APPROX_SIMPLE)
+        contours1, _ = cv2.findContours(mask[1], cv2.RETR_TREE,
+                                        cv2.CHAIN_APPROX_SIMPLE)
+        contours2, _ = cv2.findContours(mask[2], cv2.RETR_TREE,
+                                        cv2.CHAIN_APPROX_SIMPLE)
         """
         guestimate area: experimentally determined
         """
