@@ -42,22 +42,25 @@ class PlateIsolatorColour:
         Returns plates in order: parking, license, or None if no plates found
         """
         hsb = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        car_mask, car_colour = self.get_car_mask(hsb)
-        if car_mask is None:
+        car_masks, car_colours = self.get_car_mask(hsb)
+        if car_masks is None:
             if self.testing:
                 print("no car found")
                 cv2.imshow("image", img)
                 cv2.waitKey(duration)
             return None, None
 
-        parking_corners, license_corners = self.get_plate_corners(hsb, car_mask, car_colour)
+        parking_corners, license_corners = self.get_plate_corners(hsb, car_masks[0], car_colours[0])
         if (parking_corners is None or license_corners is None):
-            if self.testing:
-                cv2.imshow("image", img)
-                cv2.imshow("mask", car_mask)
-                cv2.waitKey(duration)
-                print("no plate found")
-            return None, None
+            if (len(car_masks) == 2):
+                parking_corners, license_corners = self.get_plate_corners(hsb, car_masks[1], car_colours[1])
+            if (parking_corners is None and parking_corners is None):
+                # if self.testing:
+                #     cv2.imshow("image", img)
+                #     cv2.imshow("mask", car_mask)
+                #     cv2.waitKey(duration)
+                #     print("no plate found")
+                return None, None
         parking = self.cropped_image(img, parking_corners)
         license = self.cropped_image(img, license_corners)
         if self.testing:
@@ -99,19 +102,24 @@ class PlateIsolatorColour:
             bound_num += 1
         # Get the mask that had the largest contour (largest car), and
         # the contour of said car
-        used_mask, car_contour = self.car_contour(mask)
+        used_masks, car_contours = self.car_contour(mask)
 
-        if car_contour is None:
+        if car_contours is None:
             return None, None
-        car_mask = np.zeros((img.shape[0], img.shape[1]), np.uint8)
-        cv2.drawContours(car_mask, [car_contour], -1, (255), -1)
+
+        car_masks = []
+
+        for contour in car_contours:
+            mask = np.zeros((img.shape[0], img.shape[1]), np.uint8)
+            cv2.drawContours(mask, [contour], -1, (255), -1)
+            car_masks.append(mask)
 
         if self.testing:
             cv2.imshow("image", img)
-            cv2.imshow("car mask", car_mask)
+            cv2.imshow("car mask", car_masks[0])
             cv2.waitKey(duration)
 
-        return car_mask, used_mask
+        return car_masks, used_masks
 
     def get_plate_corners(self, img, mask, colour):
         """
@@ -138,8 +146,8 @@ class PlateIsolatorColour:
 
         # 2. Use mask to get contours
         plate_mask = cv2.GaussianBlur(plate_mask, (5, 5), 1)  # regularise
-        _, contours, _ = cv2.findContours(plate_mask, cv2.RETR_TREE,
-                                          cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(plate_mask, cv2.RETR_TREE,
+                                       cv2.CHAIN_APPROX_SIMPLE)
 
         # 3. Discard contours with too small area
         MIN_AREA = int(0.75 * plate_mask.shape[0] / 10
@@ -194,12 +202,12 @@ class PlateIsolatorColour:
         return parking_poly[:, 0, :], license_poly[:, 0, :]
 
     def car_contour(self, mask):
-        _, contours0, _ = cv2.findContours(mask[0], cv2.RETR_TREE,
-                                           cv2.CHAIN_APPROX_SIMPLE)
-        _, contours1, _ = cv2.findContours(mask[1], cv2.RETR_TREE,
-                                           cv2.CHAIN_APPROX_SIMPLE)
-        _, contours2, _ = cv2.findContours(mask[2], cv2.RETR_TREE,
-                                           cv2.CHAIN_APPROX_SIMPLE)
+        contours0, _ = cv2.findContours(mask[0], cv2.RETR_TREE,
+                                        cv2.CHAIN_APPROX_SIMPLE)
+        contours1, _ = cv2.findContours(mask[1], cv2.RETR_TREE,
+                                        cv2.CHAIN_APPROX_SIMPLE)
+        contours2, _ = cv2.findContours(mask[2], cv2.RETR_TREE,
+                                        cv2.CHAIN_APPROX_SIMPLE)
         """
         guestimate area: experimentally determined
         """
@@ -216,13 +224,20 @@ class PlateIsolatorColour:
         if (len(good_contours) == 0):
             return None, None
 
+        # return our top 2 contour candidates
         car_contour = good_contours[0][0]
         car_colour = good_contours[0][1]
 
-        if (len(good_contours) > 1 and self._contour_on_edge(car_contour,
-                                                             mask[0])):
-            car_contour = good_contours[1][0]
-            car_colour = good_contours[1][1]
+        if (len(good_contours) > 1):
+            if (self._contour_on_edge(car_contour, mask[0])):
+                car_contour = [good_contours[1][0], good_contours[0][0]]
+                car_colour = [good_contours[1][1], good_contours[0][1]]
+            else:
+                car_contour = [good_contours[0][0], good_contours[1][0]]
+                car_colour = [good_contours[0][1], good_contours[1][1]]
+        else:
+            car_contour = [car_contour]
+            car_colour = [car_colour]
 
         return car_colour, car_contour
 
