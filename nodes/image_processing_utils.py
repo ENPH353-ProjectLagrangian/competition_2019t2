@@ -127,5 +127,32 @@ def find_cardinal_clusters(angles):
     if abs(headings[0]) > abs(headings[1]):
         headings = headings[::-1]
         clusters = clusters[::-1]
+
+    #  There is an ambiguity in which direction is "forward" when theta is close to pi/2.
+    #  -1 is right turn, 1 is left turn.
+    turn_bias = -1  # Starts off at -1 could be changed by advanced algorithms
+    # but probably shouldn't for this naive approach.
+
+    # The margin of what is considered "close" to an angle
+    tolerance = np.pi / 60  # 3 degrees
+
+    head_abs = np.abs(headings[1])
+    if np.abs(head_abs - 1.57) < tolerance:
+        headings[1] = turn_bias * head_abs
+
     return headings, clusters
 
+
+def find_crosswalk(img):
+    hsv_img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    lower_red = np.array([110, 150, 150])
+    upper_red = np.array([130, 255, 255])
+    # Threshold the HSV image to get only blue colors
+    mask = cv2.inRange(hsv_img, lower_red, upper_red)
+
+    if mask.max() == 0:
+        return None
+    else:
+        moments = cv2.moments(mask, binaryImage=True)
+        center = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
+        return center

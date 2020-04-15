@@ -27,4 +27,4 @@ fi
 
 ln -sfn unlabelled ../media/materials/textures/license_plates
 
-roslaunch competition_2019t2 path_follower.launch spawn_pedestrians:=$spawn_pedestrians
+roslaunch competition_2019t2 my_launch.launch spawn_pedestrians:=$spawn_pedestrians
