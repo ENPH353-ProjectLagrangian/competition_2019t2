@@ -1,8 +1,5 @@
 #!/usr/bin/env python
-"""
-TODO:
-Toon pedestrian turning
-"""
+
 import image_processing_utils as ipu
 import numpy as np
 import rospy as ros
