@@ -129,9 +129,3 @@ def find_cardinal_clusters(angles):
         clusters = clusters[::-1]
     return headings, clusters
 
-
-def detect_crosswalk(img):
-    parameters = cv2.SimpleBlobDetector_Params()
-    detector = cv2.SimpleBlobDetector_create(parameters)
-
-    return detector.detect(img[:, :, 0])
