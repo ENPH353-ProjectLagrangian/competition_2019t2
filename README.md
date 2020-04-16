@@ -1,6 +1,13 @@
 # 2019 Term 2 UBC Parking competition
 
-This is a simulation environment designed to match the real competition environment. You do not need to use it, though it might be helpful to test ideas and train control models.
+This is a simulation environment designed to match the real competition environment (edit: And also, it is the competition environment now, since school moved online). You do not need to use it, though it might be helpful to test ideas and train control models.
+
+## Other relevant repos and work
+1. Most of the plate recognition development happened here: https://github.com/ENPH353-ProjectLagrangian/PlateRecognitionModel.git
+2. Early labs and prototypes which informed our design can be found here: https://github.com/ENPH353-ProjectLagrangian/WattyPipersHeuristicALgorithm-ENPH353.git
+3. Letter recognition model training code: https://colab.research.google.com/drive/1l7tfseTdbAq7LIixRCxp8EvK_6b7Y-tH
+4. Number recognition model training code: https://colab.research.google.com/drive/1bcR5hTbAnTY0QNTWLtRN5_AXhj_6A3ZQ
+5. Final report: <TO BE ADDED>
 
 ## Installation instructions:
 * If you **do not** have a catkin workspace, please create one. You can use any folder to create it in. The example below uses your home directory.
