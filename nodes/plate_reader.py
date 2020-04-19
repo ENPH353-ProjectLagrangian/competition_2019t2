@@ -87,9 +87,9 @@ class PlateReader():
                 license_text = letter_left + letter_right + \
                     str(tens_digit) + str(ones_digit)
 
-                # assumption is that the parking # is correct
+                # assumption is that the parking is correct
                 if (parking_num not in self.parking_license_pairs):
-                    # create license plate object if none exists at this parking #
+                    # create license plate object if none exists at this parking
                     self.parking_license_pairs[parking_num] = \
                         LicensePlate(letter_left, prob_letter_left,
                                      letter_right, prob_letter_right,
@@ -275,7 +275,6 @@ def main():
     path = 'Preprocessing/IsolatingPlates/images_new_format/'
     plate_reader = PlateReader('num_model.h5', 'char_model_new.h5')
     for i in range(69, 73):
-        # print("image {}".format(i))
         test(path + 'image{}.png'.format(i), plate_reader)
     print(str(plate_reader))
 
