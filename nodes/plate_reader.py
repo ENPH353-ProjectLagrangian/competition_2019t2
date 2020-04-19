@@ -12,15 +12,22 @@ class PlateReader():
     """
     Given an image, the PlateReader object will track license-parking pairs
     Resources used: https://blog.victormeunier.com/posts/keras_multithread/
+
+    It will maintain an updated dictionary of the license plates at each parking location,
+    saving the most likely license plate text
+
+    Works in ROS callback functions (plate recognition models deal with in multi-threaded fashion)
     """
-    def __init__(self, num_model_path, char_model_path, certainty_thresh=0.7,
-                 multithreaded=True):
+    def __init__(self, num_model_path, char_model_path, certainty_thresh=0.7):
         """
         Initialises PlateReader object
 
         @param: num_model_path - path to keras ML model which IDs numbers
-        @param: num_model_path - path to keras ML model which IDs letters
+        @param: char_model_path - path to keras ML model which IDs letters
+        @param: certainty_thresh - necessary probability threshold (per char) for
+                                   process_image method to consider a plate found
         """
+        # saving the graph and thread session is necessary in the ROS framework
         thread_graph = Graph()
         with thread_graph.as_default():
             self.thread_session = Session()
@@ -38,14 +45,13 @@ class PlateReader():
     def process_image(self, img):
         """
         Finds parking number and license plate (if image contains them)
-        Saves the parking number (key), the license plate and confidence (val)
+        Saves the parking number (key), license plate object (val)
 
         If a plate is read more than once, the higher confidence result is kept
 
         @param img - the image in which we look for plates
-        @return None if certainty read < certainty or plates not found
-                else:
-                parking spot (int), license plate (str), model certainty (dec)
+        @return None, None, None (if certainty read < certainty or plates not found)
+                parking spot (int), license plate (str), model certainty (dec) (otherwise)
         """
         parking_plate, license_plate = \
             self.plate_isolator.extract_plates(img)
@@ -56,10 +62,7 @@ class PlateReader():
                     self.letter_isolator.get_chars(parking_plate,
                                                    license_plate)
 
-                # Get each number/letter on plates.
-                # If any certainty falls below the threshold,
-                # save it, but return None so that the driving knows:
-                # It Should Do Better
+                # Use our our ML models to ID number/letters
                 p_n0, prob_p_n0 = \
                     self._get_num_and_prob(p_n0)
                 p_n1, prob_p_n1 = \
@@ -84,33 +87,25 @@ class PlateReader():
                 license_text = letter_left + letter_right + \
                     str(tens_digit) + str(ones_digit)
 
-                # update each letter to have max prob value
-                # assumption is that the license plate # is correct
+                # assumption is that the parking # is correct
                 if (parking_num not in self.parking_license_pairs):
+                    # create license plate object if none exists at this parking #
                     self.parking_license_pairs[parking_num] = \
                         LicensePlate(letter_left, prob_letter_left,
                                      letter_right, prob_letter_right,
                                      tens_digit, prob_tens_digit,
                                      ones_digit, prob_ones_digit)
                 else:
+                    # update license plate object so each character in the plate
+                    # has the highest probability read value saved
                     self.parking_license_pairs[parking_num].\
                         update(letter_left, prob_letter_left,
                                letter_right, prob_letter_right,
                                tens_digit, prob_tens_digit,
                                ones_digit, prob_ones_digit)
 
-                # print("Parking {} ({})({})".format(parking_num,
-                #                                    prob_p_n0,
-                #                                    prob_p_n1))
-                # print("license text: {} ({})({})({})({})"
-                #       .format(license_text,
-                #               prob_letter_left,
-                #               prob_letter_right,
-                #               prob_tens_digit,
-                #               prob_ones_digit))
-
-                # if any of those conditions apply: return None so user knows
-                # that a better picture is needed
+                # if any character recognition falls below certainty threshold
+                # return None, None, None so that user recognise the image was not adequate
                 if (prob_p_n0 < self.certainty_thresh or
                     prob_p_n1 < self.certainty_thresh or
                     prob_letter_left < self.certainty_thresh or
@@ -125,10 +120,14 @@ class PlateReader():
                 print("letters could not be extracted from image")
                 return None, None, None
         else:
-            # print("No plates found in image")
             return None, None, None
 
     def _get_num_and_prob(self, img):
+        """
+        Identifies the image of number
+        @param: img - the image of the single digit number
+        @return: the predicted number, the probability of it being right
+        """
         img = self._preprocess_image(img)
         with self.graph.as_default():
             with self.thread_session.as_default():
@@ -139,6 +138,11 @@ class PlateReader():
         return None, None
 
     def _get_char_and_prob(self, img):
+        """
+        Identifies the image of character
+        @param: img - the image of the character
+        @return: the predicted character, the probability of it being right
+        """
         img = self._preprocess_image(img)
         with self.graph.as_default():
             with self.thread_session.as_default():
@@ -149,6 +153,15 @@ class PlateReader():
         return None, None
 
     def _preprocess_image(self, img):
+        """
+        Image preprocessing (same as preprocessing used to train model)
+            1. standardises image size
+            2. Makes image 3 channel (required by model)
+            3. Normalises channels
+            4. Packages image in format expected by keras model
+        @param img - the image to proprocess
+        @return the preprocessed image
+        """
         WIDTH = 100
         HEIGHT = 150
 
@@ -187,15 +200,42 @@ class PlateReader():
 
 class LicensePlate():
     """
-    License plate object that will update itself and its certainties
+    Saves the content of the plate, as well as the probability
+    with which each character was predicted by the model
+
+    Updates to contain the highest probability guesses
     """
     def __init__(self, c0, p_c0, c1, p_c1, n0, p_n0, n1, p_n1):
+        """
+        Creates plate object
+        @param: c0   - left character
+        @param: p_c0 - probability of left character 
+        @param: c1   - right character
+        @param: p_c1 - probability of right character 
+        @param: n0   - left digit
+        @param: p_n0 - probability of left digit 
+        @param: n1   - right digit
+        @param: p_n1 - probability of right digit 
+        """
         self.c0 = (c0, p_c0)
         self.c1 = (c1, p_c1)
         self.n0 = (n0, p_n0)
         self.n1 = (n1, p_n1)
 
     def update(self, c0, p_c0, c1, p_c1, n0, p_n0, n1, p_n1):
+        """
+        Updates plate object to have (in each position of the plate)
+        the character or digit which was given with highest probability
+
+        @param: c0   - updated guess for the left character
+        @param: p_c0 - probability of left character
+        @param: c1   - updated guess for the right character
+        @param: p_c1 - probability of right character 
+        @param: n0   - updated guess for the left digit
+        @param: p_n0 - probability of left digit 
+        @param: n1   - updated guess for the right digit
+        @param: p_n1 - probability of right digit 
+        """
         if (p_c0 > self.c0[1]):
             self.c0 = (c0, p_c0)
         if (p_c1 > self.c1[1]):
@@ -206,19 +246,32 @@ class LicensePlate():
             self.n1 = (n1, p_n1)
 
     def __str__(self):
+        """
+        String representation of the plate
+        @ return "<predicted plate text> (<certainty of prediction>)"
+        """
         total_cert = self.c0[1] + self.c1[1] + self.n0[1] + self.n1[1]
         return '{}{}{}{} ({})'.format(self.c0[0], self.c1[0], self.n0[0],
                                       self.n1[0], total_cert)
 
 
 def test(path, plate_reader):
+    """
+    Testing function called by main,
+    which runs a given image through a plate_reader object
+
+    @param path - path to image
+    @paam plate_reader - PlateReader object to test
+    """
     img = cv2.imread(path)
     parking_spot, text, _ = plate_reader.process_image(img)
-    # if (parking_spot is not None):
-    #     print("Parking: {}, {}".format(parking_spot, text))
 
 
 def main():
+    """
+    Testing function for if the plate reader is ran alone
+    @Pre: requires the path below to exist, and the models to be present
+    """
     path = 'Preprocessing/IsolatingPlates/images_new_format/'
     plate_reader = PlateReader('num_model.h5', 'char_model_new.h5')
     for i in range(69, 73):
@@ -228,4 +281,7 @@ def main():
 
 
 if __name__ == "__main__":
+    """
+    If run from the command line, run tests
+    """
     main()
