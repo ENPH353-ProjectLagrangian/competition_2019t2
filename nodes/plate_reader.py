@@ -13,10 +13,11 @@ class PlateReader():
     Given an image, the PlateReader object will track license-parking pairs
     Resources used: https://blog.victormeunier.com/posts/keras_multithread/
 
-    It will maintain an updated dictionary of the license plates at each parking location,
-    saving the most likely license plate text
+    It will maintain an updated dictionary of the license plates at each
+    parking location, saving the most likely license plate text
 
-    Works in ROS callback functions (plate recognition models deal with in multi-threaded fashion)
+    Works in ROS callback functions
+    (plate recognition models deal with in multi-threaded fashion)
     """
     def __init__(self, num_model_path, char_model_path, certainty_thresh=0.7):
         """
@@ -24,8 +25,9 @@ class PlateReader():
 
         @param: num_model_path - path to keras ML model which IDs numbers
         @param: char_model_path - path to keras ML model which IDs letters
-        @param: certainty_thresh - necessary probability threshold (per char) for
-                                   process_image method to consider a plate found
+        @param: certainty_thresh - necessary probability threshold (per char)
+                                   for process_image method to consider
+                                   a plate found
         """
         # saving the graph and thread session is necessary in the ROS framework
         thread_graph = Graph()
@@ -50,8 +52,9 @@ class PlateReader():
         If a plate is read more than once, the higher confidence result is kept
 
         @param img - the image in which we look for plates
-        @return None, None, None (if certainty read < certainty or plates not found)
-                parking spot (int), license plate (str), model certainty (dec) (otherwise)
+        @return None, None, None (if certainty < certainty/plates not found)
+                parking spot (int), license plate (str),
+                model certainty (dec) (otherwise)
         """
         parking_plate, license_plate = \
             self.plate_isolator.extract_plates(img)
@@ -89,14 +92,16 @@ class PlateReader():
 
                 # assumption is that the parking is correct
                 if (parking_num not in self.parking_license_pairs):
-                    # create license plate object if none exists at this parking
+                    # create license plate object if none exists
+                    # at this parking spot
                     self.parking_license_pairs[parking_num] = \
                         LicensePlate(letter_left, prob_letter_left,
                                      letter_right, prob_letter_right,
                                      tens_digit, prob_tens_digit,
                                      ones_digit, prob_ones_digit)
                 else:
-                    # update license plate object so each character in the plate
+                    # update license plate object
+                    # so that each character in the plate
                     # has the highest probability read value saved
                     self.parking_license_pairs[parking_num].\
                         update(letter_left, prob_letter_left,
@@ -105,7 +110,8 @@ class PlateReader():
                                ones_digit, prob_ones_digit)
 
                 # if any character recognition falls below certainty threshold
-                # return None, None, None so that user recognise the image was not adequate
+                # return None, None, None so that user recognise
+                # that the image did not result in a readable plate
                 if (prob_p_n0 < self.certainty_thresh or
                     prob_p_n1 < self.certainty_thresh or
                     prob_letter_left < self.certainty_thresh or
@@ -209,13 +215,13 @@ class LicensePlate():
         """
         Creates plate object
         @param: c0   - left character
-        @param: p_c0 - probability of left character 
+        @param: p_c0 - probability of left character
         @param: c1   - right character
-        @param: p_c1 - probability of right character 
+        @param: p_c1 - probability of right character
         @param: n0   - left digit
-        @param: p_n0 - probability of left digit 
+        @param: p_n0 - probability of left digit
         @param: n1   - right digit
-        @param: p_n1 - probability of right digit 
+        @param: p_n1 - probability of right digit
         """
         self.c0 = (c0, p_c0)
         self.c1 = (c1, p_c1)
@@ -230,11 +236,11 @@ class LicensePlate():
         @param: c0   - updated guess for the left character
         @param: p_c0 - probability of left character
         @param: c1   - updated guess for the right character
-        @param: p_c1 - probability of right character 
+        @param: p_c1 - probability of right character
         @param: n0   - updated guess for the left digit
-        @param: p_n0 - probability of left digit 
+        @param: p_n0 - probability of left digit
         @param: n1   - updated guess for the right digit
-        @param: p_n1 - probability of right digit 
+        @param: p_n1 - probability of right digit
         """
         if (p_c0 > self.c0[1]):
             self.c0 = (c0, p_c0)

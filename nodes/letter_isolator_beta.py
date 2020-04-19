@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import cv2
-import numpy as np
 
 
 class LetterIsolatorBeta:
@@ -27,36 +26,35 @@ class LetterIsolatorBeta:
         """
         Given an image of a parking and license plate,
         returns each character as a separate image.
-        @param img: greyscale image of the side of the car (with both plates)
+        @param: parking - image of parking plate
+        @param: license - image of license plate
         @return the cutout and binarised images for:
                 P (for training purposes), parking spot number (parking plate)
                 Letter0, Letter1, Num0, Num1 (license plate)
-        @throws: assertion error if we don't find the right # of chars. Catch it, try again
+        @throws: assertion error if we don't find the right # of chars.
         """
-        parking_bin = self.binarise_plate(parking)
-        license_bin = self.binarise_plate(license)
-        self.display_test(parking_bin)
-        self.display_test(license_bin)
-        p, p_n0, p_n1 = self.get_chars_from_plate_hardcode(parking_bin, 3)
-        self.display_test(p)
-        self.display_test(p_n0)
-        self.display_test(p_n1)
-        self.display_test(license_bin)
-        c0, c1, n0, n1 = self.get_chars_from_plate_hardcode(license_bin, 4)
+        parking_bin = self._binarise_plate(parking)
+        license_bin = self._binarise_plate(license)
+        self._display_test(parking_bin)
+        self._display_test(license_bin)
+        p, p_n0, p_n1 = self._get_chars_from_plate_hardcode(parking_bin, 3)
+        self._display_test(p)
+        self._display_test(p_n0)
+        self._display_test(p_n1)
+        self._display_test(license_bin)
+        c0, c1, n0, n1 = self._get_chars_from_plate_hardcode(license_bin, 4)
 
-        self.display_test(c0)
-        self.display_test(c1)
-        self.display_test(n0)
-        self.display_test(n1)
+        self._display_test(c0)
+        self._display_test(c1)
+        self._display_test(n0)
+        self._display_test(n1)
         return p, p_n0, p_n1, c0, c1, n0, n1
 
-
 # -------------------- Helpers -----------------------------
-
-    def binarise_plate(self, img):
+    def _binarise_plate(self, img):
         """
         Binarises the image to isolate plates
-        @param: input image
+        @param: img - image to binarise
         @return: the binarised image (plate black, rest white)
         """
         grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -64,81 +62,25 @@ class LetterIsolatorBeta:
                             cv2.THRESH_BINARY)[1]
         return cv2.morphologyEx(img, cv2.MORPH_OPEN, (6, 6))
 
-    def display_test(self, img, duration=3000):
+    def _display_test(self, img, duration=3000):
+        """
+        Testing purposes only: displays an image for desired time
+        @param: img - the image to display
+        @param: duration - duration for which to display image
+        """
         if (self.is_testing):
             cv2.imshow("testing", img)
             cv2.waitKey(duration)
 
-    def get_chars_from_plate(self, img, expected_letters=2, thresh=200):
+    def _get_chars_from_plate_hardcode(self, img, expected_letters):
         """
-        Returns an ordered list of letters imgs on plate (left to right)
-        @param img - image from which letters are extracted
-        @param expected_letters - number of expected letters
-                                  (2 for parking, 4 for license plate)
+        Extracts characters from the plate
 
-        https://docs.opencv.org/3.4/da/d0c/tutorial_bounding_rects_circles.html
+        @param: img - image to extract characters from
+        @param: expected_letters - number of expected letters
+                                  (for parking: 3, for license: 4)
+        @return: each individual letter, processed and scaled
         """
-        canny_out = cv2.Canny(img, thresh, 255)
-        _, contours, _ = cv2.findContours(canny_out, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-        contours_poly = [None]*len(contours)
-        boundRect = [None]*len(contours)
-        letter_rect = []
-        width = img.shape[1]
-        height = img.shape[0]
-
-        # get all contours. Eliminate those which are the wrong size
-        for i, c in enumerate(contours):
-            contours_poly[i] = cv2.approxPolyDP(c, 3, True)
-            boundRect[i] = cv2.boundingRect(contours_poly[i])
-            if (width // 12 <= boundRect[i][2] <= width // 4
-                    and height // 3 <= boundRect[i][3] <= 2 * height // 3):
-                letter_rect.append(boundRect[i])
-
-        list.sort(letter_rect, key=lambda rect: rect[0])
-
-        # delete duplicates which are overlays of each other (take the larger area of the two)
-        i = 1
-        while i in range(1, len(letter_rect)):
-            if (abs(letter_rect[i][0] - letter_rect[i - 1][0])
-                    <= width // 12):
-                if (letter_rect[i][2] * letter_rect[i][3] > letter_rect[i - 1][2] * letter_rect[i - 1][3]):
-                    letter_rect[i - 1] = letter_rect[i]
-                del letter_rect[i]
-            else:
-                i += 1
-
-        # if self.is_testing:
-        #     copy = img.copy()
-        #     for i in range(len(letter_rect)):
-        #         cv2.rectangle(img, (int(letter_rect[i][0]),
-        #                             int(letter_rect[i][1])),
-        #                            (int(letter_rect[i][0] + letter_rect[i][2]),
-        #                             int(letter_rect[i][1] + letter_rect[i][3])),
-        #                       (0), 2)
-        #     for i in range(len(boundRect)):
-        #         cv2.rectangle(copy, (int(boundRect[i][0]),
-        #                             int(boundRect[i][1])),
-        #                            (int(boundRect[i][0] + boundRect[i][2]),
-        #                             int(boundRect[i][1] + boundRect[i][3])),
-        #                       (0), 2)
-        #     cv2.imshow("letter rect", img)
-        #     cv2.imshow("bound rect", copy)
-        #     print(boundRect)
-        #     cv2.waitKey(2000)
-
-        assert len(letter_rect) == expected_letters, \
-            "letter_rect length: {}, {}".format(len(letter_rect), letter_rect)
-
-        letters = [None] * len(letter_rect)
-        for i, rect in enumerate(letter_rect):
-            # print(rect)
-            letters[i] = img[max(0, rect[1] - 2):min(img.shape[0] - 1, rect[1] + rect[3] + 2),
-                             max(0, rect[0] - 2):min(img.shape[1] - 1, rect[0] + rect[2] + 2)]
-        letters_new = [self._scale_and_blur(l) for l in letters]
-        return letters_new
-
-    def get_chars_from_plate_hardcode(self, img, expected_letters):
         w = img.shape[1]
         h = img.shape[0]
         y_top = h // 5
@@ -149,7 +91,7 @@ class LetterIsolatorBeta:
             n0 = self._scale_and_blur(img[y_top: y_bottom,
                                           3 * w // 7: 17 * w // 28])
             n1 = self._scale_and_blur(img[y_top: y_bottom,
-                                      17 * w // 28:4 * w // 5])
+                                          17 * w // 28:4 * w // 5])
             return plate, n0, n1
         elif(expected_letters == 4):
             x_offset_outer = int(w * 0.35 / 5)
@@ -169,6 +111,14 @@ class LetterIsolatorBeta:
             raise ValueError("Expected number of letters must be 2 or 4")
 
     def _scale_and_blur(self, img):
+        """
+        Processes image to approximate size,
+        adds slight blur to regularise,
+        regularise with morphological transformations.
+
+        @param: img - image to process
+        @return: processed image
+        """
         MAX_IMG_WIDTH = 64
 
         width = img.shape[1]

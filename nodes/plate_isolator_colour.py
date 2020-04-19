@@ -5,27 +5,40 @@ import numpy as np
 from scipy.spatial import distance as dist
 
 
-def _contour_length_tuple(c):
-    return cv2.arcLength(c[0], True)
+def _contour_length_tuple(contour):
+    """
+    Used to sort contours by length
+    (could be a lambda but for code clarity was chosen not to be)
+
+    @param contour - contours
+    @return arclength of contour
+    """
+    return cv2.arcLength(contour[0], True)
 
 
 class PlateIsolatorColour:
     """
-    The goal of this module is to pick out parking
-    1. will pull out cars by colour
+    The goal of this module is to pick out parking plates
 
-    Input: a clean image of the plates
-           Random, likely terrible images picked up from Anki camera
+    Provided with an image, it will find the plates (if they exist)
 
-    Resources:
+    Requires cars to fit the hue definition below
+    (though colour bounds can be adjusted)
+
+    Resources used:
     https://www.pyimagesearch.com/2014/08/04/opencv-python-color-detection/
     """
 
     def __init__(self, colour_bounds=None, testing=False):
         """
-        Sets up our sift recognition based off of our pattern
+        Initialises the colour bounds based off of
+        which cars are identified
+
+        @param colour_bounds - colour boundaries of cars. If none, use default
+        @param testing - determines whether intermediate images show
+                         and if print statements are used
         """
-        # in order HSB, green, blue, yellow
+        # HSB representations in the order: green, blue, yellow
         if colour_bounds is None:
             self.colour_bounds = [
                 ([50, 0, 0], [80, 255, 255]),
@@ -39,40 +52,57 @@ class PlateIsolatorColour:
 
     def extract_plates(self, img, duration=1000):
         """
-        Returns plates in order: parking, license, or None if no plates found
+        Picks out license plates from image
+        @param: img - image in which to search for plates
+        @param: duration - if testing set to true, display time for debugging
+        @return: None, if no plates found
+                 parking plate, license plate, otherwise
         """
         hsb = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        car_masks, car_colours = self.get_car_mask(hsb)
+        car_masks, car_colours = self._get_car_mask(hsb)
         if car_masks is None:
+            # no cars found
             if self.testing:
                 print("no car found")
                 cv2.imshow("image", img)
                 cv2.waitKey(duration)
             return None, None
 
-        parking_corners, license_corners = self.get_plate_corners(hsb, car_masks[0], car_colours[0])
+        parking_corners, license_corners = self._get_plate_corners(hsb, car_masks[0], car_colours[0])
         if (parking_corners is None or license_corners is None):
+            # no plates found on the first mask
             if (len(car_masks) == 2):
-                parking_corners, license_corners = self.get_plate_corners(hsb, car_masks[1], car_colours[1])
+                """
+                Note that two car contours are tried bc because when
+                driving in the middle, the largest car contour spotted
+                is often a car facing the wrong direction: therefore
+                the second largest contour may be
+                the one in which a plate can be found
+                """
+                parking_corners, license_corners = self._get_plate_corners(hsb, car_masks[1], car_colours[1])
             if (parking_corners is None and parking_corners is None):
-                # if self.testing:
-                #     cv2.imshow("image", img)
-                #     cv2.imshow("mask", car_mask)
-                #     cv2.waitKey(duration)
-                #     print("no plate found")
+                # couldn't find plate
                 return None, None
-        parking = self.cropped_image(img, parking_corners)
-        license = self.cropped_image(img, license_corners)
+
+        # extract plates from their outlines
+        parking = self._cropped_image(img, parking_corners)
+        license = self._cropped_image(img, license_corners)
         if self.testing:
             cv2.imshow("image", img)
             cv2.imshow("parking", parking)
             cv2.imshow("license", license)
             cv2.waitKey(duration)
-            # print("success")
 
         return parking, license
 
-    def get_car_mask(self, img, duration=3000):
+    def _get_car_mask(self, img, duration=3000):
+        """
+        Helper function which extracts (based on colour) up to 2 car masks
+
+        @param: img - image in which car is being searched for
+        @return: list of car masks (len 1 or 2)
+                 list of ints representing colours used to get masks
+        """
         bound_num = 0
 
         mask = [None, None, None]
@@ -84,25 +114,20 @@ class PlateIsolatorColour:
             upper = np.array(upper, dtype="uint8")
 
             # find colours in the range, apply mask
-            if self.testing:
-                if (bound_num == 0):
-                    title = "green"
-                elif (bound_num == 1):
-                    title = "blue"
-                else:
-                    title = "yellow"
-
             mask[bound_num] = cv2.inRange(img, lower, upper)
 
-            # if self.testing:
-            #     output = cv2.bitwise_and(img, img, mask=mask[bound_num])
-            #     cv2.imshow(title, np.hstack([img, output]))
-            #     cv2.waitKey(duration)
-
             bound_num += 1
-        # Get the mask that had the largest contour (largest car), and
-        # the contour of said car
-        used_masks, car_contours = self.car_contour(mask)
+
+        """
+        Get the two masks that had the largest contours (largest car), and
+        the contour of said cars
+
+        Note that two masks/contours are given because when driving in the
+        middle, the largest car contour spotted is often a car facing the
+        wrong direction: therefore the second largest contour may be the one
+                         we want
+        """
+        used_masks, car_contours = self._car_contour(mask)
 
         if car_contours is None:
             return None, None
@@ -121,7 +146,7 @@ class PlateIsolatorColour:
 
         return car_masks, used_masks
 
-    def get_plate_corners(self, img, mask, colour):
+    def _get_plate_corners(self, img, mask, colour):
         """
         Returns 4 corners of the plates (with perspective still) as an np array
         Parking plate first, then license plate
@@ -201,18 +226,31 @@ class PlateIsolatorColour:
 
         return parking_poly[:, 0, :], license_poly[:, 0, :]
 
-    def car_contour(self, mask):
-        contours0, _ = cv2.findContours(mask[0], cv2.RETR_TREE,
+    def _car_contour(self, masks):
+        """
+        Given a list of 3 masks (each created via filtering a different colour)
+        searches for car contours based on a minimum area criteria.
+        Larger area contours area prioritised
+        (as they are more likely to yield readable plates)
+
+        @param: mask - list of 3 mask in which to search for contours
+        @return: list of (1 to 2) ints representing colours
+                 (colour used to create masks of the top 2 contours)
+                 list of (1 to 2) contours deemed the most likely car contours
+        """
+        contours0, _ = cv2.findContours(masks[0], cv2.RETR_TREE,
                                         cv2.CHAIN_APPROX_SIMPLE)
-        contours1, _ = cv2.findContours(mask[1], cv2.RETR_TREE,
+        contours1, _ = cv2.findContours(masks[1], cv2.RETR_TREE,
                                         cv2.CHAIN_APPROX_SIMPLE)
-        contours2, _ = cv2.findContours(mask[2], cv2.RETR_TREE,
+        contours2, _ = cv2.findContours(masks[2], cv2.RETR_TREE,
                                         cv2.CHAIN_APPROX_SIMPLE)
         """
         guestimate area: experimentally determined
         """
-        MIN_AREA = (int)(0.75 * mask[0].shape[1] / 6 * mask[0].shape[0] / 4)
+        MIN_AREA = (int)(0.75 * masks[0].shape[1] / 6 * masks[0].shape[0] / 4)
 
+        # the second val in the tuples (0, 1, 2)
+        # used to identify which colour was used to create the masks
         cont_0 = [(c, 0) for c in contours0 if cv2.contourArea(c) > MIN_AREA]
         cont_1 = [(c, 1) for c in contours1 if cv2.contourArea(c) > MIN_AREA]
         cont_2 = [(c, 2) for c in contours2 if cv2.contourArea(c) > MIN_AREA]
@@ -225,27 +263,47 @@ class PlateIsolatorColour:
             return None, None
 
         # return our top 2 contour candidates
-        car_contour = good_contours[0][0]
-        car_colour = good_contours[0][1]
+        car_contours = good_contours[0][0]
+        car_colours = good_contours[0][1]
 
         if (len(good_contours) > 1):
-            if (self._contour_on_edge(car_contour, mask[0])):
-                car_contour = [good_contours[1][0], good_contours[0][0]]
-                car_colour = [good_contours[1][1], good_contours[0][1]]
+            if (self._contour_on_edge(car_contours, masks[0])):
+                car_contours = [good_contours[1][0], good_contours[0][0]]
+                car_colours = [good_contours[1][1], good_contours[0][1]]
             else:
-                car_contour = [good_contours[0][0], good_contours[1][0]]
-                car_colour = [good_contours[0][1], good_contours[1][1]]
+                car_contours = [good_contours[0][0], good_contours[1][0]]
+                car_colours = [good_contours[0][1], good_contours[1][1]]
         else:
-            car_contour = [car_contour]
-            car_colour = [car_colour]
+            car_contours = [car_contours]
+            car_colours = [car_colours]
 
-        return car_colour, car_contour
+        return car_colours, car_contours
 
-    def cropped_image(self, img, corners):
+    def _cropped_image(self, img, corners):
+        """
+        Picks the subset of img described by the four corners
+        in corners. Uses a perspective transform to render it a rectangle
+
+        Used to pick out license plates based on the corners of their contours
+
+        @param: img - the image to crop
+        @param: corner - 4 corners to crop around
+        @return: cropped image
+        """
         ordered_corners = self._order_corners(corners)
         return self._four_point_transform(img, ordered_corners)
 
     def _four_point_transform(self, img, ordered_corners):
+        """
+        Takes the 4 point transform of the image based on ordered corners
+        provided.
+        Returns the perspective transform of the quadrilateral defined by
+        the corners, such that the quadrilateral is transformed to a rectangle
+
+        @param: img - image to tack the transform of
+        @param: ordered_corners - ordered corners of quadrilateral
+        @return: perspective transform of the image
+        """
         # obtain a consistent order of the points and unpack them
         # individually
         (tl, tr, br, bl) = ordered_corners
@@ -280,7 +338,7 @@ class PlateIsolatorColour:
     def _order_corners(self, corners):
         """
         Helper function to generate our 4 points for perspective transform
-        Important: points are generated in a consistent order! I'll do:
+        Points will be ordered as such:
         1. top-left
         2. top-right
         3. bottom-right
@@ -288,6 +346,9 @@ class PlateIsolatorColour:
 
         From this blog post:
         https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
+
+        @param: corners - corners to order
+        @return: the ordered corners
         """
 
         # sort points by X
@@ -305,6 +366,10 @@ class PlateIsolatorColour:
         return np.array([tl, tr, br, bl], dtype="float32")
 
     def _contour_on_edge(self, c, mask):
-        # print(c[:, 0, 0])
+        """
+        @param: c - contour
+        @param: mask - mask of full image
+        @return: true if c is on the edge of mask, false otherwise
+        """
         return (np.min(c[:, 0, 0]) < 2) or \
                (np.max(c[:, 0, 0]) > mask.shape[1] - 2)
