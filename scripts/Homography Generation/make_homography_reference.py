@@ -1,6 +1,6 @@
 """
 Alters the property of the homography reference image to used in generate_homography.py.
-For example the size of the image and how "high up" in the sky the new perspective is.
+For instance the size of the image and how "high up" in the sky the new perspective is.
 
 """
 import sys

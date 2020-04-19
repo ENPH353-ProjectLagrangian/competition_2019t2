@@ -3,66 +3,42 @@ import numpy as np
 import copy
 
 
-def get_hough_lines(img, img_type="edges", threshold=125, probabilistic=False, min_line_length=100, max_line_gap=10):
+def draw_lines(img, lines, color=(0, 0, 255), size=2):
     """
+    Draws lines on image. modifies img.
 
-    @param img: image to generate lines on
-    @param threshold: threshold to pass to the Houghlines generator
-    @param probabilistic: if true uses the probabalistic hough transform see cv2.HoughLinesP (
-    @param min_line_length: minimum length of a line, passed to cv2.HoughLinesP
-    @param max_line_gap: maximum gap in a line, passed to cv2.HoughLinesP
-    @param verbose: Whether to print information to the console (Currently unimplemented)
+    :param img: Image to be drawn upon.
+    :param lines: Lines written in hesse normal form to be drawn on image.
+    :param color: Color of drawn lines.
+    :param size: Size of drawn lines.
 
-    @return: ndarray of lines. By default each line is represented by the length and angle of a vector
-    (with origin (0,0)) normal to and intersecting the line. If probabalistic is true lines are instead
-    represented by a pair of end points of a line segment,
     """
-    if img_type == "color":
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-
-    elif img_type == "gray":
-        edges = cv2.Canny(img, 50, 150, apertureSize=3)
-    elif img_type == "edges":
-        edges = img
-    else:
-        raise ValueError("Img type " + img_type + " not supported")
-
-    if probabilistic:
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180,
-                                threshold, min_line_length, max_line_gap)
-
-    else:
-        lines = cv2.HoughLines(edges, 1, np.pi / 180, threshold)
-
-    return lines
-
-
-def draw_lines(img, lines, probabilistic=False, color=(0, 0, 255), size=2):
     length = max((img.shape[0], img.shape[1]))
 
     for line in lines:
-        if probabilistic:
-            for x1, y1, x2, y2 in line:
-                cv2.line(img, (x1, y1), (x2, y2), color, size)
+        for rho, theta in line:
+            a = np.cos(theta)
+            b = np.sin(theta)
+            x0 = a * rho
+            y0 = b * rho
+            x1 = int(x0 + length * (-b))
+            y1 = int(y0 + length * a)
+            x2 = int(x0 - length * (-b))
+            y2 = int(y0 - length * a)
 
-        else:
-            for rho, theta in line:
-                a = np.cos(theta)
-                b = np.sin(theta)
-                x0 = a * rho
-                y0 = b * rho
-                x1 = int(x0 + length * (-b))
-                y1 = int(y0 + length * a)
-                x2 = int(x0 - length * (-b))
-                y2 = int(y0 - length * a)
-
-                cv2.line(img, (x1, y1), (x2, y2), color, size)
+            cv2.line(img, (x1, y1), (x2, y2), color, size)
 
 
 def find_cardinal_clusters(angles):
-    # The K-means algorithm is sometimes unreliable.
-    # But because we know the distribution of the angles already we can create a much more reliable one
+    """
+    Custom clustering algorithm clusters groups of angles into two orthogonal clusters.
+    Angles outside these clusters will be disregarded.
+    Angles close to 180 degrees apart will be moved into the same cluster.
+
+    :param angles: Array of angles to be analyzed
+    :return: headings: Size two list of mean angles of orthogonal clusters
+             clusters: Two arrays of indices of angles that fit into respective clusters.
+    """
 
     good_buckets = np.array([[0], [np.pi / 2]])
     min_include = -1
@@ -144,10 +120,15 @@ def find_cardinal_clusters(angles):
 
 
 def find_crosswalk(img):
+    """
+    Find the center of crosswalks seen by robot.
+    :param img: image to analyze
+    :return: Pixel coordinates of center of crosswalk in image or None if no crosswalk is detected.
+    """
     hsv_img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
     lower_red = np.array([110, 150, 150])
     upper_red = np.array([130, 255, 255])
-    # Threshold the HSV image to get only blue colors
+    # Threshold the HSV image to get only red parts
     mask = cv2.inRange(hsv_img, lower_red, upper_red)
 
     if mask.max() == 0:
