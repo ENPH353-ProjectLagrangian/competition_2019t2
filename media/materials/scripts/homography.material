@@ -1,0 +1,12 @@
+material homography{
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture acircles.png
+            }
+        }
+    }
+}

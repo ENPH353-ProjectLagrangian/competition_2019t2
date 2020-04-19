@@ -1,6 +1,6 @@
 <launch>
-	<param name="/use_sim_time" value="true" />
-    <arg name="spawn_pedestrians" default="false"/>
+    <param name="/use_sim_time" value="true"/>
+    <arg name="spawn_pedestrians" default="True"/>
 
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
         <env name="GAZEBO_RESOURCE_PATH" value="$(find competition_2019t2)"/>
@@ -8,12 +8,20 @@
         <arg name="world_name" value="$(find competition_2019t2)/worlds/competition_2019t2.world"/>
         <arg name="gui" value="true"/>
     </include>
-    
+
     <include file="$(find competition_2019t2)/launch/robot.launch">
-        <arg name="init_pose" value="-x -2.2 -y -2.4 -z 0.05 -R 0.0 -P 0.0 -Y 1.57" />
+        <arg name="init_pose" value="-x -2.2 -y -2.4 -z 0.05 -R 0.0 -P 0.0 -Y 1.57"/>
     </include>
 
     <include file="$(find competition_2019t2)/launch/npcs.launch">
-		<arg name="spawn_pedestrians" value="$(arg spawn_pedestrians)"/>
-	</include>
+        <arg name="spawn_pedestrians" value="$(arg spawn_pedestrians)"/>
+    </include>
+
+    <!-- Package launch file -->
+    <node
+            pkg="competition_2019t2"
+            type="parking_bot.py"
+            name="parking_bot"
+            output="screen">
+    </node>
 </launch>
