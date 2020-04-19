@@ -42,7 +42,6 @@ class ParkingBot:
     """
 
     def __init__(self, verbose=True, do_visualization=True):
-        self.sub = ros.Subscriber('/rrbot/camera1/image_raw', Image, self.process_image)
 
         """
         Boolean options for display and debugging.
@@ -66,7 +65,12 @@ class ParkingBot:
         """
         Halt condition parameters
         """
-        self.min_plate_confidence = 3.99
+        self.min_plate_confidence = 3.9
+
+        """
+        Init the subscriber
+        """
+        self.sub = ros.Subscriber('/rrbot/camera1/image_raw', Image, self.process_image)
 
     def process_image(self, imgmsg):
         """
@@ -107,7 +111,9 @@ class ParkingBot:
         """
         If we have read 6 license plates and are confident in their readings we finish the run.
         """
-        if self.parking_dict.__len__() == 6 and min(probabilities) > self.min_plate_confidence:
+        time = self.path_follower.time_stamp
+        if (self.parking_dict.__len__() == 6 and min(probabilities) > self.min_plate_confidence) \
+                or int(time.secs / 60) > 4:
             self.path_follower.publish_move(0, 0)
 
             self.sub.unregister()
@@ -116,8 +122,8 @@ class ParkingBot:
             else:
                 print("Failed.")
 
-            print("Completed in {} minutes and {} seconds".format(int(self.path_follower.time_stamp.secs / 60),
-                                                                  self.path_follower.time_stamp.secs % 60))
+            print("Completed in {} minutes and {} seconds".format(int(time.secs / 60),
+                                                                  time.secs % 60))
             print(self.parking_dict)
             print("Done")
 
