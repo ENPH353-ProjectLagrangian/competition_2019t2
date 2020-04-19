@@ -10,19 +10,7 @@ import global_variables as gv
 from plate_reader import PlateReader
 from path_follower import PathFollower
 
-import pandas
-
 bridge = CvBridge()
-
-
-def compare_with_csv(discovered_plates):
-    """
-    Compares plates found to plates generated.
-    :param discovered_plates: a list of plates discovered by the parking bot.
-    :return: True if all plates discovered are in the generated plates csv.
-    """
-    generated_plates = pandas.read_csv(gv.path + "/../scripts/plates.csv")
-    return all(plate in generated_plates for plate in discovered_plates)
 
 
 def get_image(imgmsg):
@@ -117,10 +105,6 @@ class ParkingBot:
             self.path_follower.publish_move(0, 0)
 
             self.sub.unregister()
-            if compare_with_csv(list(self.parking_dict[parking_number][0] for parking_number in self.parking_dict)):
-                print("Probable Success.")
-            else:
-                print("Failed.")
 
             print("Completed in {} minutes and {} seconds".format(int(time.secs / 60),
                                                                   time.secs % 60))
